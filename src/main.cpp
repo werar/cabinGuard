@@ -1,5 +1,6 @@
 /***
-* TODO: temperature as float
+* TODO: temperature as float  maybe printf and linker options: -Wl,-u,vfprintf -lprintf_flt -lm   or: PRINTF_LIB_FLOAT = -Wl,-u,vfprintf -lprintf_flt -lm
+* http://winavr.scienceprog.com/avr-gcc-tutorial/using-sprintf-function-for-float-numbers-in-avr-gcc.html
 * TODO: check who is calling if known number arm/disarm sending alerts
 * At+clip=1 or at+clcc during ring
 * "AT#CID=1" - to enable caller ID
@@ -13,16 +14,17 @@
 #include <Arduino.h>
 #include <Wire.h>                                                       // required by BME280 library
 #include <BME280_t.h>
+#include "U8glib.h"
 #include "main.h"
 #include "gsm_modem.h"
 
 #define MYALTITUDE  150.50
-#define DEBUG
-
 
 BME280<> BMESensor;
+U8GLIB_SSD1306_128X64 u8g(U8G_I2C_OPT_NONE);
 parameters_type parameters;                                               // instantiate sensor
 volatile timers_type timers;
+
 
 void print_BMEData() //TODO: save that to some structure.
 {
@@ -62,10 +64,29 @@ void get_BMEData()
 }
 
 
+void draw(void) {
+  // graphic commands to redraw the complete screen should be placed here
+  u8g.setFont(u8g_font_unifont);
+  u8g.drawStr( 0, 10, "Telemetry:");
+  char str[15];
+  sprintf(str, "%.1fC", parameters.temperature);
+  u8g.drawStr( 0, 23, str);
+  sprintf(str, "%d%%", parameters.humidity);
+  u8g.drawStr( 0, 36, str);
+  sprintf(str, "%.1fhPa", parameters.pressure);
+  u8g.drawStr( 0, 49, str);
+  if(parameters.enable_alert)
+  {
+    u8g.drawStr( 0, 62, "alarm enabled");
+  }else
+  {
+    u8g.drawStr( 0, 62, "alarm disabled");
+  }
+}
 /***
 * The regsisters values can be calulated here: http://www.arduinoslovakia.eu/application/timer-calculator
 */
-void init_timers()
+void init_avr_timers()
 {
   cli();
   TCCR1A = 0;
@@ -74,17 +95,18 @@ void init_timers()
   TCCR1A |= (1<<WGM12); //CTC mode timer1
   TCCR1B |= (1<<CS11)|(1<<CS10); //prescaler64
   // 1 Hz (80000/((1249+1)*64))
-  OCR1A = 1249; //(target time) = (timer resolution) * (# timer counts + 1)  //TODO: not sure if that is 1 sec
+  OCR1A = 1249; //(target time) = (timer resolution) * (# timer counts + 1)
   TIMSK1 |= (1<<OCIE1A);
   sei();
 }
 
 ISR(TIMER1_COMPA_vect)
 {
-  PORTB ^= (1 << PB5); //bulit in led
+  //PORTB ^= (1 << PB5); //bulit in led
   timers.secounds--;
   timers.sent_message--;
   timers.sent_telemetry_report--;
+  timers.reenable_alerts--;
 }
 
 void reset_timers()
@@ -93,6 +115,7 @@ void reset_timers()
   timers.sent_telemetry_report=SECOUNDS_TO_SEND_TELEMETRY_REPORT;
   timers.sent_message=SECOUNDS_TO_WAIT_WITH_ALERT_MESSAGE;
   timers.is_alert_was_sent=false;
+  timers.reenable_alerts=SECOUNDS_TO_WAIT_WITH_ALERT_MESSAGE;
 }
 
 void check_movement()
@@ -107,9 +130,18 @@ void check_movement()
   return;
 }
 
-void messages_and_reports()
+void alerts()
 {
-  if(parameters.pir_alert && !timers.is_alert_was_sent)
+  bool disable_alerts=is_calling(PHONE_TO_UNARM);
+  if(disable_alerts)
+  {
+    parameters.enable_alert=false;
+  }
+  if(timers.reenable_alerts<=0)
+  {
+    parameters.enable_alert=true;
+  }
+  if(parameters.pir_alert && !timers.is_alert_was_sent && parameters.enable_alert)
   {
     send_sms(ALERT_MESSAGE_TEXT,PHONE_TO_CALL);
     timers.is_alert_was_sent=true;
@@ -121,22 +153,32 @@ void messages_and_reports()
       timers.is_alert_was_sent=false;
     }
   }
+}
+
+void messages_and_reports()
+{
+   // picture loop
+   u8g.firstPage();
+   do {
+    draw();
+   } while( u8g.nextPage() );
 
   if(timers.sent_telemetry_report<=0)
   {
     char text_to_sent[248];
     strcpy(text_to_sent,"Telemetry report\n");
     char buf[20];
-    //sprintf(buf, "Temperature: %.1f\n", (double)parameters.temperature);
-    sprintf(buf, "Temperature: %d\n",parameters.temperature);
+    sprintf(buf, "Temperature: %.2f\n", (double)parameters.temperature);
+    //sprintf(buf, "Temperature: %d\n",parameters.temperature);
     strcat(text_to_sent,buf);
     sprintf(buf, "Humidity: %d%%\n", parameters.humidity);
     strcat(text_to_sent,buf);
-    sprintf(buf, "Pressure: %d\n", parameters.pressure);
+    sprintf(buf, "Pressure: %.2fhPa\n", parameters.pressure);
     strcat(text_to_sent,buf);
     send_sms(text_to_sent,PHONE_TO_CALL);
     timers.sent_telemetry_report=SECOUNDS_TO_SEND_TELEMETRY_REPORT;
   }
+
 }
 
 void setup()
@@ -146,8 +188,10 @@ void setup()
   init_GSM();
   delay(5000);
   BMESensor.begin();                                                    // initalize bme280 sensor
-  init_timers();
+  init_avr_timers();
   reset_timers();
+  parameters.enable_alert=true;
+
 }
 
 void loop()
@@ -155,5 +199,8 @@ void loop()
    get_BMEData();
    check_movement();
    messages_and_reports();
-   delay(100);                                                          // wait a while before next loop
+   alerts();
+
+
+   delay(10);                                                    // wait a while before next loop
 }

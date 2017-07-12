@@ -1,35 +1,31 @@
 /***
-TODO: temperature as float
-TODO: check who is calling if known number arm/disarm sending alerts
-At+clip=1 or at+clcc during ring
-"AT#CID=1" - to enable caller ID
-
-TODO: use power off to save energy AT+CPWROFF
-
-TODO: maybe via GPRS to send reports alerts as well?
-https://shortn0tes.blogspot.com/2016/05/neoway-m590-gprs-tutorial-sending-and.html (look at comments)
-
+* TODO: temperature as float
+* TODO: check who is calling if known number arm/disarm sending alerts
+* At+clip=1 or at+clcc during ring
+* "AT#CID=1" - to enable caller ID
+*
+* TODO: use power off to save energy AT+CPWROFF
+* TODO: fix function names convention  based on that? http://www.ganssle.com/misc/fsm.doc
+* TODO: maybe via GPRS to send reports alerts as well?
+* https://shortn0tes.blogspot.com/2016/05/neoway-m590-gprs-tutorial-sending-and.html (look at comments)
 */
+
 #include <Arduino.h>
 #include <Wire.h>                                                       // required by BME280 library
 #include <BME280_t.h>
 #include "main.h"
 
-//decrease  default modem speed: AT+IPR=9600
 
-#define ASCII_ESC 27
+
 #define MYALTITUDE  150.50
-
 #define DEBUG
 
 char bufout[10];
-
 BME280<> BMESensor;
-
 parameters_type parameters;                                               // instantiate sensor
 volatile timers_type timers;
 
-void printBMEData() //TODO: save that to some structure.
+void print_BMEData() //TODO: save that to some structure.
 {
   BMESensor.refresh();                                                  // read current sensor data
   sprintf(bufout,"%c[1;0H",ASCII_ESC);
@@ -58,7 +54,7 @@ void printBMEData() //TODO: save that to some structure.
 }
 
 
-void getBMEData()
+void get_BMEData()
 {
   BMESensor.refresh();                                                  // read current sensor data
   parameters.temperature=BMESensor.temperature;
@@ -161,7 +157,7 @@ void messages_and_reports()
 {
   if(parameters.pir_alert && !timers.is_alert_was_sent)
   {
-    send_sms("Intruder inside the house!! Call to Lukasz!");
+    send_sms(ALERT_MESSAGE_TEXT);
     timers.is_alert_was_sent=true;
     timers.sent_message=SECOUNDS_TO_WAIT_WITH_ALERT_MESSAGE;
   }else
@@ -174,7 +170,6 @@ void messages_and_reports()
 
   if(timers.sent_telemetry_report<=0)
   {
-
     char text_to_sent[248];
     strcpy(text_to_sent,"Telemetry report\n");
     char buf[20];
@@ -203,7 +198,7 @@ void setup()
 }
 
 void loop() {
-   getBMEData();
+   get_BMEData();
    check_movement();
    messages_and_reports();
    delay(100);                                                          // wait a while before next loop

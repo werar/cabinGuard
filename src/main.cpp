@@ -8,20 +8,25 @@
 * TODO: use power off to save energy AT+CPWROFF
 * TODO: fix function names convention  based on that? http://www.ganssle.com/misc/fsm.doc
 * TODO: maybe via GPRS to send reports alerts as well?
+* TODO: move to u8g2 https://github.com/olikraus/u8g2/wiki
 * https://shortn0tes.blogspot.com/2016/05/neoway-m590-gprs-tutorial-sending-and.html (look at comments)
 */
 
 #include <Arduino.h>
 #include <Wire.h>                                                       // required by BME280 library
 #include <BME280_t.h>
-#include "U8glib.h"
+#include <SPI.h>
+#include <U8g2lib.h>
+
+
 #include "main.h"
 #include "gsm_modem.h"
 
 #define MYALTITUDE  150.50
 
 BME280<> BMESensor;
-U8GLIB_SSD1306_128X64 u8g(U8G_I2C_OPT_NONE);
+
+U8X8_SSD1306_128X64_NONAME_HW_I2C u8x8(5,4);
 parameters_type parameters;                                               // instantiate sensor
 volatile timers_type timers;
 
@@ -66,21 +71,28 @@ void get_BMEData()
 
 void draw(void) {
   // graphic commands to redraw the complete screen should be placed here
-  u8g.setFont(u8g_font_unifont);
-  u8g.drawStr( 0, 10, "Telemetry:");
+  u8x8.setFont(u8x8_font_victoriamedium8_r);
+  u8x8.drawString( 0, 0, "Telemetry:");
   char str[15];
-  sprintf(str, "%.1fC", parameters.temperature);
-  u8g.drawStr( 0, 23, str);
-  sprintf(str, "%d%%", parameters.humidity);
-  u8g.drawStr( 0, 36, str);
-  sprintf(str, "%.1fhPa", parameters.pressure);
-  u8g.drawStr( 0, 49, str);
+  sprintf(str, "%.1fC  ", parameters.temperature);
+  u8x8.drawString( 0, 1, str);
+  sprintf(str, "%d%%  ", parameters.humidity);
+  u8x8.drawString( 0, 2, str);
+  sprintf(str, "%.1fhPa  ", parameters.pressure);
+  u8x8.drawString( 0, 3, str);
   if(parameters.enable_alert)
   {
-    u8g.drawStr( 0, 62, "alarm enabled");
+    u8x8.drawString( 0, 4, "alarm enabled ");
   }else
   {
-    u8g.drawStr( 0, 62, "alarm disabled");
+    u8x8.drawString( 0, 4, "alarm disabled");
+  }
+  if(parameters.pir_alert)
+  {
+    u8x8.drawString( 0, 5, "pir alert: true ");
+  }else
+  {
+    u8x8.drawString( 0, 5, "pir alert: false");
   }
 }
 /***
@@ -132,7 +144,7 @@ void check_movement()
 
 void alerts()
 {
-  bool disable_alerts=is_calling(PHONE_TO_UNARM);
+  bool disable_alerts=is_calling(PHONE_TO_UNARM,u8x8);
   if(disable_alerts)
   {
     parameters.enable_alert=false;
@@ -157,15 +169,10 @@ void alerts()
 
 void messages_and_reports()
 {
-   // picture loop
-   u8g.firstPage();
-   do {
-    draw();
-   } while( u8g.nextPage() );
-
+  draw();
   if(timers.sent_telemetry_report<=0)
   {
-    char text_to_sent[248];
+    char text_to_sent[100];
     strcpy(text_to_sent,"Telemetry report\n");
     char buf[20];
     sprintf(buf, "Temperature: %.2f\n", (double)parameters.temperature);
@@ -185,6 +192,7 @@ void setup()
 {
   Serial.begin(4800);                                                 // initialize serial
   pinMode(PIR_PIN, INPUT);  //TODO: use avr convention
+  u8x8.begin();
   init_GSM();
   delay(5000);
   BMESensor.begin();                                                    // initalize bme280 sensor

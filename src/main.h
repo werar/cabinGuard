@@ -28,4 +28,6 @@ typedef struct timers_type
   bool is_alert_was_sent;
 };
 
+
+
 #endif

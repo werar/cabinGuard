@@ -6,6 +6,9 @@
 
 #include <Arduino.h>
 #include "gsm_modem.h"
+#include "main.h"
+
+
 
 //#define DEBUG //uncomment that if you want to see messages on Serial console
 /***
@@ -13,7 +16,7 @@
 */
 void init_GSM()
 {
-  delay(2000);
+  delay(5000);
   Serial.write("AT+CREG?\r");
   delay(300);
   Serial.write("AT+CSCS=\"GSM\"\r");
@@ -35,7 +38,7 @@ void init_GSM()
 //M590.print("AT+CCID\r");
 
 
-void send_sms(char* message, const char* phone_no)
+void send_sms(const char* message, const char* phone_no)
 {
   #ifdef DEBUG
   Serial.println(message);
@@ -62,12 +65,19 @@ RING
 *
 *TODO: migrate to pure avr soluiton
 */
-bool is_calling(char* caller_number)
+bool is_calling(char* caller_number,U8X8 u8x8)
 {
-  char buffer[100];//="OK\n\RING\n+CLIP: \"517083663\",129,,,\"\",0\nRING\+CLIP: \"517083663\",129,,,\"\",0";
+  char buffer[50];//="OK\n\RING\n+CLIP: \"517083663\",129,,,\"\",0\nRING\+CLIP: \"517083663\",129,,,\"\",0";
   if (Serial.available() > 0)
   {
-  Serial.readBytesUntil('\n', buffer, 100);
+  Serial.readBytesUntil('\n', buffer, 50);
+  if(&u8x8!=NULL)
+  {
+    u8x8.setFont(u8x8_font_victoriamedium8_r);
+    u8x8.setCursor(0, 6);
+    u8x8.print("               ");
+    u8x8.print(buffer);
+  }
   char * pch;
   pch = strstr(buffer,"+CLIP");
   if(pch!=NULL)

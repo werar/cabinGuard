@@ -147,7 +147,7 @@ void alerts()
   }
   if(parameters.pir_alert && !timers.is_alert_was_sent && parameters.enable_alert)
   {
-    //send_sms(ALERT_MESSAGE_TEXT,PHONE_TO_CALL);
+    send_sms(ALERT_MESSAGE_TEXT,PHONE_TO_CALL);
     timers.is_alert_was_sent=true;
     timers.sent_message=SECOUNDS_TO_WAIT_WITH_ALERT_MESSAGE;
   }else
@@ -164,8 +164,8 @@ void messages_and_reports()
   draw();
   if(timers.sent_telemetry_report<=0)
   {
-    char text_to_sent[120]; //"POST /dweet/for/werar1234?test=1 HTTP/1.1\r\nHost: dweet.io\r\nConnection: close\r\nAccept: */*\r\n\r\n"
-    sprintf(text_to_sent, "POST /dweet/for/werar1234?temp=%.2f&hum=%d&press=%.2f HTTP/1.1\r\nHost: dweet.io\r\nConnection: close\r\nAccept: */*\r\n\r\n", (double)parameters.temperature,parameters.humidity,parameters.pressure);
+    char text_to_sent[150]; //"POST /dweet/for/werar1234?test=1 HTTP/1.1\r\nHost: dweet.io\r\nConnection: close\r\nAccept: */*\r\n\r\n"
+    sprintf(text_to_sent, "POST /dweet/for/werar1234?temp=%.2f&hum=%d&press=%.2f&pir_alert=%d HTTP/1.1\r\nHost: dweet.io\r\nConnection: close\r\nAccept: */*\r\n\r\n", (double)parameters.temperature,parameters.humidity,parameters.pressure,parameters.pir_alert);
     send_telemetry_report(text_to_sent);
     timers.sent_telemetry_report=SECOUNDS_TO_SEND_TELEMETRY_REPORT;
   }
@@ -197,9 +197,8 @@ void setup()
   Serial.begin(4800);                                                 // initialize serial
   pinMode(PIR_PIN, INPUT);  //TODO: use avr convention
   u8x8.begin();
-//  init_GSM();
+  init_GSM();
   init_GPRS();
-  delay(5000);
   BMESensor.begin();                                                    // initalize bme280 sensor
   init_avr_timers();
   reset_timers();

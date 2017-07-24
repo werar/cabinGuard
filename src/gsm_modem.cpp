@@ -12,7 +12,19 @@ https://www.freeboard.io/board/edit/rBbZQR
 #include "gsm_modem.h"
 #include "main.h"
 
-
+/***
+*
+TODO: https://shortn0tes.blogspot.com/2016/05/neoway-m590-gprs-tutorial-sending-and.html
+TODO: enable TCPIP  via: http://docs.mirifica.eu/Neoway.com/M590/Neoway%20M590%20AT%20Command%20Sets_V3.0.pdf
+*/
+void init_GPRS()
+{
+  delay(5000);
+  write_and_wait("AT+XISP=0\r",500);
+  write_and_wait("AT+cgdcont=1,\"IP\",\"internet\"\r",500);  //http://www.orange.pl/kid,4004241603,id,4004242390,title,Jakie-sa-prawidlowe-parametry-do-konfiguracji,helparticle.html
+  write_and_wait("AT+XGAUTH=1,1,\"internet\",\"internet\"\r",1000);
+  write_and_wait("AT+xiic=1\r",20000);
+}
 
 //#define DEBUG //uncomment that if you want to see messages on Serial console
 /***
@@ -40,7 +52,6 @@ void init_GSM()
 //Serial.println("delete all SMS"); // delete all SMS
 //delay(2500);
 //M590.print("AT+CCID\r");
-
 
 void send_sms(const char* message, const char* phone_no)
 {
@@ -101,18 +112,7 @@ bool is_calling(char* caller_number,U8X8 u8x8)
 }
 
 
-/***
-*
-TODO: https://shortn0tes.blogspot.com/2016/05/neoway-m590-gprs-tutorial-sending-and.html
-TODO: enable TCPIP  via: http://docs.mirifica.eu/Neoway.com/M590/Neoway%20M590%20AT%20Command%20Sets_V3.0.pdf
-*/
-void init_GPRS()
-{
-  write_and_wait("AT+XISP=0\r",500);
-  write_and_wait("AT+cgdcont=1,\"IP\",\"internet\"\r",500);  //http://www.orange.pl/kid,4004241603,id,4004242390,title,Jakie-sa-prawidlowe-parametry-do-konfiguracji,helparticle.html
-  write_and_wait("AT+XGAUTH=1,1,\"internet\",\"internet\"\r",1000);
-  write_and_wait("AT+xiic=1\r",1000);
-}
+
 
 /***
 *

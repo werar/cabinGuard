@@ -1,14 +1,9 @@
 /***
-* TODO: temperature as float  maybe printf and linker options: -Wl,-u,vfprintf -lprintf_flt -lm   or: PRINTF_LIB_FLOAT = -Wl,-u,vfprintf -lprintf_flt -lm
-* http://winavr.scienceprog.com/avr-gcc-tutorial/using-sprintf-function-for-float-numbers-in-avr-gcc.html
-* TODO: check who is calling if known number arm/disarm sending alerts
-* At+clip=1 or at+clcc during ring
-* "AT#CID=1" - to enable caller ID
 *
 * TODO: use power off to save energy AT+CPWROFF
-* TODO: fix function names convention  based on that? http://www.ganssle.com/misc/fsm.doc
-* TODO: maybe via GPRS to send reports alerts as well?
-* TODO: move to u8g2 https://github.com/olikraus/u8g2/wiki
+* TODO: fix function names convention based on that? http://www.ganssle.com/misc/fsm.doc
+* TODO: use GPRS to send mqtt report
+* BUG: disabling via cLIP call works only once
 * https://shortn0tes.blogspot.com/2016/05/neoway-m590-gprs-tutorial-sending-and.html (look at comments)
 */
 
@@ -18,18 +13,16 @@
 #include <SPI.h>
 #include <U8g2lib.h>
 
-
 #include "main.h"
 #include "gsm_modem.h"
 
-#define MYALTITUDE  150.50
+#define MYALTITUDE  150.50 //TODO: not used, delete it
 
 BME280<> BMESensor;
 
 U8X8_SSD1306_128X64_NONAME_HW_I2C u8x8(5,4);
 parameters_type parameters;                                               // instantiate sensor
 volatile timers_type timers;
-
 
 void print_BMEData() //TODO: save that to some structure.
 {
@@ -67,7 +60,6 @@ void get_BMEData()
   parameters.humidity=BMESensor.humidity;                                     // display humidity in %
   parameters.pressure=BMESensor.pressure  / 100.0F;                           // display pressure in hPa
 }
-
 
 void draw(void) {
   // graphic commands to redraw the complete screen should be placed here
@@ -155,7 +147,7 @@ void alerts()
   }
   if(parameters.pir_alert && !timers.is_alert_was_sent && parameters.enable_alert)
   {
-    send_sms(ALERT_MESSAGE_TEXT,PHONE_TO_CALL);
+    //send_sms(ALERT_MESSAGE_TEXT,PHONE_TO_CALL);
     timers.is_alert_was_sent=true;
     timers.sent_message=SECOUNDS_TO_WAIT_WITH_ALERT_MESSAGE;
   }else
@@ -168,6 +160,19 @@ void alerts()
 }
 
 void messages_and_reports()
+{
+  draw();
+  if(timers.sent_telemetry_report<=0)
+  {
+    char text_to_sent[120]; //"POST /dweet/for/werar1234?test=1 HTTP/1.1\r\nHost: dweet.io\r\nConnection: close\r\nAccept: */*\r\n\r\n"
+    sprintf(text_to_sent, "POST /dweet/for/werar1234?temp=%.2f&hum=%d&press=%.2f HTTP/1.1\r\nHost: dweet.io\r\nConnection: close\r\nAccept: */*\r\n\r\n", (double)parameters.temperature,parameters.humidity,parameters.pressure);
+    send_telemetry_report(text_to_sent);
+    timers.sent_telemetry_report=SECOUNDS_TO_SEND_TELEMETRY_REPORT;
+  }
+}
+
+
+void messages_and_reports_via_sms()
 {
   draw();
   if(timers.sent_telemetry_report<=0)
@@ -185,7 +190,6 @@ void messages_and_reports()
     send_sms(text_to_sent,PHONE_TO_CALL);
     timers.sent_telemetry_report=SECOUNDS_TO_SEND_TELEMETRY_REPORT;
   }
-
 }
 
 void setup()
@@ -193,13 +197,13 @@ void setup()
   Serial.begin(4800);                                                 // initialize serial
   pinMode(PIR_PIN, INPUT);  //TODO: use avr convention
   u8x8.begin();
-  init_GSM();
+//  init_GSM();
+  init_GPRS();
   delay(5000);
   BMESensor.begin();                                                    // initalize bme280 sensor
   init_avr_timers();
   reset_timers();
   parameters.enable_alert=true;
-
 }
 
 void loop()
@@ -208,7 +212,5 @@ void loop()
    check_movement();
    messages_and_reports();
    alerts();
-
-
    delay(10);                                                    // wait a while before next loop
 }

@@ -79,18 +79,20 @@ RING
 +CLIP: "517083663",129,,,"",0
 *
 *TODO: migrate to pure avr soluiton
+*TODO:
 */
 bool is_calling(char* caller_number,U8X8 u8x8)
 {
-  char buffer[50];//="OK\n\RING\n+CLIP: \"517083663\",129,,,\"\",0\nRING\+CLIP: \"517083663\",129,,,\"\",0";
+  char buffer[100];//="OK\n\RING\n+CLIP: \"517083663\",129,,,\"\",0\nRING\+CLIP: \"517083663\",129,,,\"\",0";
   if (Serial.available() > 0)
   {
-  Serial.readBytesUntil('\n', buffer, 50);
+  Serial.readBytesUntil('\n', buffer, 100);
   if(&u8x8!=NULL)
   {
     u8x8.setFont(u8x8_font_victoriamedium8_r);
     u8x8.setCursor(0, 6);
     u8x8.print("               ");
+    u8x8.setCursor(0, 6);
     u8x8.print(buffer);
   }
   char * pch;
@@ -123,14 +125,15 @@ V
 void send_telemetry_report(const char* report)
 {
   write_and_wait("AT+TCPSETUP=0,34.203.32.119,80\r",1000);  //use dweet.io / freeboard //TODO: IP as #define
-  char buf[20];
+  char buf[25];
   uint16_t string_lenght = strlen(report);
   sprintf(buf, "AT+TCPSEND=0,%d\r",string_lenght);
   write_and_wait(buf,1000);
   //write_and_wait("POST /dweet/for/werar1234?test=1 HTTP/1.1\r\nHost: dweet.io\r\nConnection: close\r\nAccept: */*\r\n\r\n",500); //http://www.esp8266.com/viewtopic.php?f=19&t=1981
   write_and_wait(report,500);
-  write_and_wait((char)0x0D,1000);
-  write_and_wait("AT+TCPCLOSE=1\r",500);
+  const char c = (char)0x0D;
+  write_and_wait(&c,1000);
+  //write_and_wait("AT+TCPCLOSE=1\r",500);
 }
 
 void write_and_wait(const char* text, uint16_t delay_time)

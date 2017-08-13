@@ -12,7 +12,7 @@
 
 typedef struct parameters_type
 {
-      float temperature; //TODO: use long but test that.
+      float temperature; 
       uint8_t humidity;
       bool pir_alert;
       bool enable_alert;

@@ -16,8 +16,6 @@
 #include "main.h"
 #include "gsm_modem.h"
 
-#define MYALTITUDE  150.50 //TODO: not used, delete it
-
 BME280<> BMESensor;
 
 U8X8_SSD1306_128X64_NONAME_HW_I2C u8x8(5,4);
@@ -43,6 +41,7 @@ void print_BMEData() //TODO: save that to some structure.
   Serial.print(BMESensor.pressure  / 100.0F);                           // display pressure in hPa
   Serial.println("hPa");
 
+  /*
   float relativepressure = BMESensor.seaLevelForAltitude(MYALTITUDE);
   Serial.print("RelPress:    ");
   Serial.print(relativepressure  / 100.0F);                             // display relative pressure in hPa for given altitude
@@ -51,6 +50,7 @@ void print_BMEData() //TODO: save that to some structure.
   Serial.print("Altitude:    ");
   Serial.print(BMESensor.pressureToAltitude(relativepressure));         // display altitude in m for given pressure
   Serial.println("m");
+  */
 }
 
 void get_BMEData()
@@ -66,11 +66,11 @@ void draw(void) {
   u8x8.setFont(u8x8_font_victoriamedium8_r);
   u8x8.drawString( 0, 0, "Telemetry:");
   char str[15];
-  sprintf(str, "%.1fC  ", parameters.temperature);
+  sprintf(str, "%.1fC  ", (double)parameters.temperature);
   u8x8.drawString( 0, 1, str);
   sprintf(str, "%d%%  ", parameters.humidity);
   u8x8.drawString( 0, 2, str);
-  sprintf(str, "%.1fhPa  ", parameters.pressure);
+  sprintf(str, "%.1fhPa  ", (double)parameters.pressure);
   u8x8.drawString( 0, 3, str);
   if(parameters.enable_alert)
   {
@@ -119,7 +119,7 @@ void reset_timers()
   timers.sent_telemetry_report=SECOUNDS_TO_SEND_TELEMETRY_REPORT;
   timers.sent_message=SECOUNDS_TO_WAIT_WITH_ALERT_MESSAGE;
   timers.is_alert_was_sent=false;
-  timers.reenable_alerts=SECOUNDS_TO_WAIT_WITH_ALERT_MESSAGE;
+  timers.reenable_alerts=SECOUNDS_TO_ARM_ALERTS;
 }
 
 void check_movement()
@@ -134,9 +134,11 @@ void check_movement()
   return;
 }
 
-void alerts()
+void alerts()//BUG two counters are doing the same timers.reenable_alerts   timers.sent_message
 {
-  bool disable_alerts=is_calling(PHONE_TO_UNARM,u8x8);
+
+  bool disable_alerts=false;
+  //disable_alerts=is_calling(PHONE_TO_UNARM,u8x8);
   if(disable_alerts)
   {
     parameters.enable_alert=false;
@@ -144,18 +146,14 @@ void alerts()
   if(timers.reenable_alerts<=0)
   {
     parameters.enable_alert=true;
+    timers.is_alert_was_sent=false;
   }
   if(parameters.pir_alert && !timers.is_alert_was_sent && parameters.enable_alert)
   {
     send_sms(ALERT_MESSAGE_TEXT,PHONE_TO_CALL);
     timers.is_alert_was_sent=true;
-    timers.sent_message=SECOUNDS_TO_WAIT_WITH_ALERT_MESSAGE;
-  }else
-  {
-    if(timers.sent_message<=0)
-    {
-      timers.is_alert_was_sent=false;
-    }
+    timers.reenable_alerts=SECOUNDS_TO_ARM_ALERTS;
+    //timers.sent_message=SECOUNDS_TO_WAIT_WITH_ALERT_MESSAGE;
   }
 }
 
@@ -165,8 +163,8 @@ void messages_and_reports()
   if(timers.sent_telemetry_report<=0)
   {
     char text_to_sent[150]; //"POST /dweet/for/werar1234?test=1 HTTP/1.1\r\nHost: dweet.io\r\nConnection: close\r\nAccept: */*\r\n\r\n"
-    sprintf(text_to_sent, "POST /dweet/for/werar1234?temp=%.2f&hum=%d&press=%.2f&pir_alert=%d HTTP/1.1\r\nHost: dweet.io\r\nConnection: close\r\nAccept: */*\r\n\r\n", (double)parameters.temperature,parameters.humidity,parameters.pressure,parameters.pir_alert);
-    send_telemetry_report(text_to_sent);
+    sprintf(text_to_sent, "POST /dweet/for/werar1234?temp=%.2f&hum=%d&press=%.2f&pir_alert=%d HTTP/1.1\r\nHost: dweet.io\r\nConnection: close\r\nAccept: */*\r\n\r\n", (double)parameters.temperature,parameters.humidity,(double)parameters.pressure,parameters.pir_alert);
+    send_telemetry_report(text_to_sent); //BUG: the soft hangs after sending few messages
     timers.sent_telemetry_report=SECOUNDS_TO_SEND_TELEMETRY_REPORT;
   }
 }
@@ -185,7 +183,7 @@ void messages_and_reports_via_sms()
     strcat(text_to_sent,buf);
     sprintf(buf, "Humidity: %d%%\n", parameters.humidity);
     strcat(text_to_sent,buf);
-    sprintf(buf, "Pressure: %.2fhPa\n", parameters.pressure);
+    sprintf(buf, "Pressure: %.2fhPa\n", (double)parameters.pressure);
     strcat(text_to_sent,buf);
     send_sms(text_to_sent,PHONE_TO_CALL);
     timers.sent_telemetry_report=SECOUNDS_TO_SEND_TELEMETRY_REPORT;
@@ -208,6 +206,7 @@ void setup()
 void loop()
 {
    get_BMEData();
+   //print_BMEData();
    check_movement();
    messages_and_reports();
    alerts();

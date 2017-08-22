@@ -12,7 +12,7 @@
 
 typedef struct parameters_type
 {
-      float temperature; 
+      float temperature;
       uint8_t humidity;
       bool pir_alert;
       bool enable_alert;
@@ -21,10 +21,9 @@ typedef struct parameters_type
 
 typedef struct timers_type
 {
-  long secounds;
-  long sent_message;
-  long sent_telemetry_report;
-  long reenable_alerts;
+  uint32_t secounds;
+  uint32_t sent_telemetry_report;
+  uint32_t reenable_alerts;
   bool is_alert_was_sent;
 };
 

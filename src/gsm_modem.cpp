@@ -12,18 +12,34 @@ https://www.freeboard.io/board/edit/rBbZQR
 #include "gsm_modem.h"
 #include "main.h"
 
+//#define DEBUG
+
 /***
-*
-TODO: https://shortn0tes.blogspot.com/2016/05/neoway-m590-gprs-tutorial-sending-and.html
-TODO: enable TCPIP  via: http://docs.mirifica.eu/Neoway.com/M590/Neoway%20M590%20AT%20Command%20Sets_V3.0.pdf
 */
 void init_GPRS()
 {
-  delay(5000);
+  uint8_t number_of_try=5;
+  delay(6000);
+  while(number_of_try>0)
+  {
+      send_commands_to_init_GPRS();
+      if(is_ppp_link_established())
+      {
+        return;
+      }else
+      {
+        number_of_try--;
+        delay(1000);
+      }
+  }
+}
+
+void send_commands_to_init_GPRS()
+{
   write_and_wait("AT+XISP=0\r",500);
   write_and_wait("AT+cgdcont=1,\"IP\",\"internet\"\r",500);  //http://www.orange.pl/kid,4004241603,id,4004242390,title,Jakie-sa-prawidlowe-parametry-do-konfiguracji,helparticle.html
   write_and_wait("AT+XGAUTH=1,1,\"internet\",\"internet\"\r",1000);
-  write_and_wait("AT+xiic=1\r",20000);
+  write_and_wait("AT+xiic=1\r",5000);
 }
 
 //#define DEBUG //uncomment that if you want to see messages on Serial console
@@ -32,7 +48,7 @@ void init_GPRS()
 */
 void init_GSM()
 {
-  delay(5000); //needed to establish connecton with GSM network
+  delay(6000); //needed to establish connecton with GSM network
   Serial.write("AT+CREG?\r");
   delay(300);
   Serial.write("AT+CSCS=\"GSM\"\r");
@@ -40,6 +56,8 @@ void init_GSM()
   Serial.write("AT+CMGF=1\r");    //text mode
   delay(300);
   Serial.write("AT+CLIP=1\r");
+  delay(300);
+  Serial.write("AT+CMGD=4\r"); //delete all smses
   delay(300);
 }
  // blurt out contents of new SMS upon receipt to the GSM shield's serial out
@@ -58,6 +76,38 @@ void send_sms(const char* message, const char* phone_no)
   #ifdef DEBUG
   Serial.println(message);
   #else
+  prepare_and_send_sms(message, phone_no);
+  /***
+  If error will recived reinit GSM connection
+  OK
+  AT+CMGS="0048517083663"
+  > Intruder inside the house!! Call to Elvis!␚
+  >
+  ERROR <<<<< here is the problem
+  */
+
+  const uint8_t buffer_size=15;
+  char buffer[buffer_size];
+  if (Serial.available() > 0)
+  {
+    Serial.readBytesUntil('\n', buffer, buffer_size);//echo skip it
+    Serial.readBytesUntil('\n', buffer, buffer_size);
+    char * pch;
+    pch = strstr(buffer,"ERROR");
+    if(pch!=NULL)
+    {
+      Serial.println("Error during sms sending, gsm initialization is required");
+      init_GSM();
+      prepare_and_send_sms(message, phone_no);
+    }
+  }
+
+  #endif
+}
+
+
+void prepare_and_send_sms(const char* message, const char* phone_no)
+{
   Serial.write("AT+CMGS=\"");
   Serial.write(phone_no);
   Serial.write(0x22);
@@ -67,8 +117,9 @@ void send_sms(const char* message, const char* phone_no)
   Serial.print(message);
   delay(500);
   Serial.print(char(26));//the ASCII code of the ctrl+z is 26
-  #endif
 }
+
+
 /***
 * If you set CLIP=1 during the call the caller number will be shown. Below dump of the modem output:
 AT+CLIP=1
@@ -79,42 +130,37 @@ RING
 +CLIP: "517083663",129,,,"",0
 *
 *TODO: migrate to pure avr soluiton
-*TODO:
 */
 bool is_calling(char* caller_number,U8X8 u8x8)
 {
   char buffer[100];//="OK\n\RING\n+CLIP: \"517083663\",129,,,\"\",0\nRING\+CLIP: \"517083663\",129,,,\"\",0";
   if (Serial.available() > 0)
   {
-  Serial.readBytesUntil('\n', buffer, 100);
-  if(&u8x8!=NULL)
-  {
-    u8x8.setFont(u8x8_font_victoriamedium8_r);
-    u8x8.setCursor(0, 6);
-    u8x8.print("               ");
-    u8x8.setCursor(0, 6);
-    u8x8.print(buffer);
-  }
-  char * pch;
-  pch = strstr(buffer,"+CLIP");
-  if(pch!=NULL)
-  {
-    pch = strstr(buffer,caller_number);
-    if(pch!=NULL) //looks like I call to the system
-    { //action to diable/enable alerting
-      PORTB ^= (1 << PB5);
-      return true;
-    }else{
-      return false;
+    Serial.readBytesUntil('\r', buffer, 100);
+    if(&u8x8!=NULL) //TODO: buffer is longer than row on u8x8 cut, show, delay little bit is needed.
+    {
+      u8x8.setFont(u8x8_font_victoriamedium8_r);
+      u8x8.setCursor(0, 6);
+      u8x8.print("               ");
+      u8x8.setCursor(0, 6);
+      u8x8.print(buffer);
+    }
+    char * pch;
+    pch = strstr(buffer,"+CLIP");
+    if(pch!=NULL)
+    {
+      pch = strstr(buffer,caller_number);
+      if(pch!=NULL)
+      { //action to disable/enable alerting
+        PORTB ^= (1 << PB5);
+        return true;
+      }else{
+        return false;
+      }
     }
   }
   return false;
-  }
-  return false;
 }
-
-
-
 
 /***
 *
@@ -124,6 +170,10 @@ V
 */
 void send_telemetry_report(const char* report)
 {
+  if(!is_ppp_link_established())
+  {
+    init_GPRS();
+  }
   write_and_wait("AT+TCPSETUP=0,34.203.32.119,80\r",1000);  //use dweet.io / freeboard //TODO: IP as #define
   char buf[25];
   uint16_t string_lenght = strlen(report);
@@ -133,11 +183,69 @@ void send_telemetry_report(const char* report)
   write_and_wait(report,500);
   const char c = (char)0x0D;
   write_and_wait(&c,1000);
-  //write_and_wait("AT+TCPCLOSE=1\r",500);
+  //write_and_wait("AT+TCPCLOSE=0\r",500);
 }
 
 void write_and_wait(const char* text, uint16_t delay_time)
 {
   Serial.write(text);
   delay(delay_time);
+}
+
+/***
+After some time (hour?) estalished ppp link/connection is closed. Initializatoin is required in that case.
+Below example of problem:
+
++TCPSETUP:0,FAIL
+AT+TCPSETUP=0,34.203.32.119,80  <<setup is ok but ppp link is down use XIIC to check that
+OK
+AT+TCPSEND=0,129
++TCPSEND:Error1  <<<<<< Is error ppp link is not set:
+POST /dweet/for/werar1234?temp=24.16&hum=60&press=979.84&pir_alert=1 HTTP/1.1
+ERROR <<<<<<<< is ERROR
+
+to test if ppp link is ok use:
+AT+XIIC?
++XIIC:    0, 0.0.0.0   <<<<<it means that ppp link is not ok
+
+at+xiic?
++XIIC:    1, 10.224.178.69 <<<<< means that the link is set
+*/
+bool is_ppp_link_established()
+{
+  //write_and_wait("AT+IPSTATUS=0\r",500); //
+  write_and_wait("AT+XIIC?\r",1000);
+  //if wrong will be: +XIIC:    0, 0.0.0.0    (first 4 spaces and 0)
+  //if good: +XIIC:    1, 10.224.178.69 (fist 4 spaces and 1)
+  const uint8_t buffer_size=35;
+  char buffer[buffer_size]={"xxxxxxxxxx"};
+  uint8_t chars_in_line=0;
+  if (Serial.available() > 0)
+  {
+    chars_in_line=Serial.readBytesUntil('\n', buffer, buffer_size); //first line is echo (AT+XIIC?!)
+    chars_in_line=Serial.readBytesUntil('\n', buffer, buffer_size);//
+  }
+  if(chars_in_line==0)
+  {
+    Serial.println("No any line recived on UART");
+  }else
+  {
+    //Serial.print("Buffer: ");
+    //Serial.print(buffer);
+    //Serial.println(" END.");
+  }
+
+  char * pch;
+  pch = strstr(buffer,"+XIIC:    0,");
+  //pch = strstr(buffer,"0.0.0.0");
+  if(pch!=NULL)
+  {
+      //ppp is not established reinit link
+      //Serial.println("PPP is not established - gprs init is required");
+    return false;
+  }else
+  {
+      //Serial.println("PPP is established");
+    return true;
+  }
 }

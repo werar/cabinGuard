@@ -1,9 +1,8 @@
 /***
 *
-* TODO: use power off to save energy AT+CPWROFF
+*
 * TODO: fix function names convention based on that? http://www.ganssle.com/misc/fsm.doc
-* TODO: use GPRS to send mqtt report
-* BUG: disabling via cLIP call works only once
+* TODO: sms is full - add someting checking that
 * https://shortn0tes.blogspot.com/2016/05/neoway-m590-gprs-tutorial-sending-and.html (look at comments)
 */
 
@@ -15,6 +14,8 @@
 
 #include "main.h"
 #include "gsm_modem.h"
+
+//#define DEBUG
 
 BME280<> BMESensor;
 
@@ -40,17 +41,6 @@ void print_BMEData() //TODO: save that to some structure.
   Serial.print("Pressure:    ");
   Serial.print(BMESensor.pressure  / 100.0F);                           // display pressure in hPa
   Serial.println("hPa");
-
-  /*
-  float relativepressure = BMESensor.seaLevelForAltitude(MYALTITUDE);
-  Serial.print("RelPress:    ");
-  Serial.print(relativepressure  / 100.0F);                             // display relative pressure in hPa for given altitude
-  Serial.println("hPa");
-
-  Serial.print("Altitude:    ");
-  Serial.print(BMESensor.pressureToAltitude(relativepressure));         // display altitude in m for given pressure
-  Serial.println("m");
-  */
 }
 
 void get_BMEData()
@@ -61,7 +51,8 @@ void get_BMEData()
   parameters.pressure=BMESensor.pressure  / 100.0F;                           // display pressure in hPa
 }
 
-void draw(void) {
+void draw(void)
+{
   // graphic commands to redraw the complete screen should be placed here
   u8x8.setFont(u8x8_font_victoriamedium8_r);
   u8x8.drawString( 0, 0, "Telemetry:");
@@ -108,7 +99,6 @@ ISR(TIMER1_COMPA_vect)
 {
   //PORTB ^= (1 << PB5); //bulit in led
   timers.secounds--;
-  timers.sent_message--;
   timers.sent_telemetry_report--;
   timers.reenable_alerts--;
 }
@@ -117,7 +107,6 @@ void reset_timers()
 {
   timers.secounds=0;
   timers.sent_telemetry_report=SECOUNDS_TO_SEND_TELEMETRY_REPORT;
-  timers.sent_message=SECOUNDS_TO_WAIT_WITH_ALERT_MESSAGE;
   timers.is_alert_was_sent=false;
   timers.reenable_alerts=SECOUNDS_TO_ARM_ALERTS;
 }
@@ -134,11 +123,10 @@ void check_movement()
   return;
 }
 
-void alerts()//BUG two counters are doing the same timers.reenable_alerts   timers.sent_message
+void alerts()
 {
-
   bool disable_alerts=false;
-  //disable_alerts=is_calling(PHONE_TO_UNARM,u8x8);
+  disable_alerts=is_calling(PHONE_TO_UNARM,u8x8);
   if(disable_alerts)
   {
     parameters.enable_alert=false;
@@ -153,7 +141,6 @@ void alerts()//BUG two counters are doing the same timers.reenable_alerts   time
     send_sms(ALERT_MESSAGE_TEXT,PHONE_TO_CALL);
     timers.is_alert_was_sent=true;
     timers.reenable_alerts=SECOUNDS_TO_ARM_ALERTS;
-    //timers.sent_message=SECOUNDS_TO_WAIT_WITH_ALERT_MESSAGE;
   }
 }
 
@@ -164,11 +151,14 @@ void messages_and_reports()
   {
     char text_to_sent[150]; //"POST /dweet/for/werar1234?test=1 HTTP/1.1\r\nHost: dweet.io\r\nConnection: close\r\nAccept: */*\r\n\r\n"
     sprintf(text_to_sent, "POST /dweet/for/werar1234?temp=%.2f&hum=%d&press=%.2f&pir_alert=%d HTTP/1.1\r\nHost: dweet.io\r\nConnection: close\r\nAccept: */*\r\n\r\n", (double)parameters.temperature,parameters.humidity,(double)parameters.pressure,parameters.pir_alert);
+    #ifdef DEBUG
+    Serial.println(text_to_sent);
+    #else
     send_telemetry_report(text_to_sent); //BUG: the soft hangs after sending few messages
+    #endif
     timers.sent_telemetry_report=SECOUNDS_TO_SEND_TELEMETRY_REPORT;
   }
 }
-
 
 void messages_and_reports_via_sms()
 {
@@ -179,7 +169,6 @@ void messages_and_reports_via_sms()
     strcpy(text_to_sent,"Telemetry report\n");
     char buf[20];
     sprintf(buf, "Temperature: %.2f\n", (double)parameters.temperature);
-    //sprintf(buf, "Temperature: %d\n",parameters.temperature);
     strcat(text_to_sent,buf);
     sprintf(buf, "Humidity: %d%%\n", parameters.humidity);
     strcat(text_to_sent,buf);
@@ -195,6 +184,7 @@ void setup()
   Serial.begin(4800);                                                 // initialize serial
   pinMode(PIR_PIN, INPUT);  //TODO: use avr convention
   u8x8.begin();
+  delay(8000); //TODO: check if modem is ready (+PBREADY)
   init_GSM();
   init_GPRS();
   BMESensor.begin();                                                    // initalize bme280 sensor

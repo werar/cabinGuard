@@ -53,6 +53,7 @@ void get_BMEData()
 
 void draw(void)
 {
+  if(&u8x8==NULL)  return;
   // graphic commands to redraw the complete screen should be placed here
   u8x8.setFont(u8x8_font_victoriamedium8_r);
   u8x8.drawString( 0, 0, "Telemetry:");
@@ -77,6 +78,10 @@ void draw(void)
   {
     u8x8.drawString( 0, 5, "pir alert: false");
   }
+  sprintf(str, "%d ", timers.sent_telemetry_report);
+  u8x8.setCursor(0, 6);
+  u8x8.print("               ");
+  u8x8.drawString(0, 6, str);
 }
 /***
 * The regsisters values can be calulated here: http://www.arduinoslovakia.eu/application/timer-calculator
@@ -114,7 +119,7 @@ void reset_timers()
 void check_movement()
 {
   int val = digitalRead(PIR_PIN);   // read the input pin
-  if(val==0)
+  if(val==LOW)
   {
     parameters.pir_alert=false;
     return;
@@ -126,7 +131,7 @@ void check_movement()
 void alerts()
 {
   bool disable_alerts=false;
-  disable_alerts=is_calling(PHONE_TO_UNARM,u8x8);
+  disable_alerts=is_calling(PHONE_TO_UNARM);
   if(disable_alerts)
   {
     parameters.enable_alert=false;
@@ -184,9 +189,10 @@ void setup()
   Serial.begin(4800);                                                 // initialize serial
   pinMode(PIR_PIN, INPUT);  //TODO: use avr convention
   u8x8.begin();
-  delay(8000); //TODO: check if modem is ready (+PBREADY)
+  delay(15000); //TODO: check if modem is ready (+PBREADY)
   init_GSM();
   init_GPRS();
+  update_time_from_provider();
   BMESensor.begin();                                                    // initalize bme280 sensor
   init_avr_timers();
   reset_timers();
@@ -200,5 +206,5 @@ void loop()
    check_movement();
    messages_and_reports();
    alerts();
-   delay(10);                                                    // wait a while before next loop
+   delay(1002);                                                    // wait a while before next loop
 }

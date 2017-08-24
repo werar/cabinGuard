@@ -42,13 +42,21 @@ void send_commands_to_init_GPRS()
   write_and_wait("AT+xiic=1\r",5000);
 }
 
+void update_time_from_provider()
+{
+  write_and_wait("AT+COPS=2\r",1000);
+  write_and_wait("AT+CTZU=1\r",1000);
+  write_and_wait("AT+COPS=0\r",1000);
+  write_and_wait("AT+CCLK?\r",1000);
+
+}
+
 //#define DEBUG //uncomment that if you want to see messages on Serial console
 /***
 * M590 chip MUST to be supplied near 4.2V! 3.3 is not enough!
 */
 void init_GSM()
 {
-  delay(6000); //needed to establish connecton with GSM network
   Serial.write("AT+CREG?\r");
   delay(300);
   Serial.write("AT+CSCS=\"GSM\"\r");
@@ -57,7 +65,7 @@ void init_GSM()
   delay(300);
   Serial.write("AT+CLIP=1\r");
   delay(300);
-  Serial.write("AT+CMGD=4\r"); //delete all smses
+  Serial.write("AT+CMGD=0,4\r"); //delete all smses
   delay(300);
 }
  // blurt out contents of new SMS upon receipt to the GSM shield's serial out
@@ -76,6 +84,7 @@ void send_sms(const char* message, const char* phone_no)
   #ifdef DEBUG
   Serial.println(message);
   #else
+  init_GSM(); //TODO: still hard to catch the error, workaroud: restart evry time the
   prepare_and_send_sms(message, phone_no);
   /***
   If error will recived reinit GSM connection
@@ -86,8 +95,41 @@ void send_sms(const char* message, const char* phone_no)
   ERROR <<<<< here is the problem
   */
 
-  const uint8_t buffer_size=15;
-  char buffer[buffer_size];
+  const uint8_t buffer_size=50;
+  char buffer[buffer_size]={"xxxxxxxxxx"};
+  if (Serial.available() > 0)
+  {
+    Serial.readBytesUntil('\n', buffer, buffer_size);//echo skip it
+    Serial.readBytesUntil('\n', buffer, buffer_size);
+    //Serial.readBytesUntil('\n', buffer, buffer_size);
+    //Serial.readBytesUntil('\n', buffer, buffer_size);
+    //Serial.readBytesUntil('\n', buffer, buffer_size);
+    //Serial.print("Buffer: ");
+    //Serial.print(buffer);
+    //Serial.println(" END.\r");
+    char * pch;
+    pch = strstr(buffer,"ERROR");
+    if(pch!=NULL)
+    {
+      Serial.println("Error during sms sending, gsm initialization is required");
+      init_GSM();
+      prepare_and_send_sms(message, phone_no);
+    }
+    pch = strstr(buffer,"OK");
+    if(pch!=NULL)
+    {
+      //Serial.println("Status was OK");
+    }
+  }
+  #endif
+}
+
+
+void prepare_and_send_sms(const char* message, const char* phone_no)
+{
+  const uint8_t buffer_size=50;//TODO: refactoring needed.
+  char buffer[buffer_size]={"xxxxxxxxxx"};
+  Serial.write("AT+CMGS=\""); //after that can be an error
   if (Serial.available() > 0)
   {
     Serial.readBytesUntil('\n', buffer, buffer_size);//echo skip it
@@ -98,17 +140,9 @@ void send_sms(const char* message, const char* phone_no)
     {
       Serial.println("Error during sms sending, gsm initialization is required");
       init_GSM();
-      prepare_and_send_sms(message, phone_no);
     }
   }
 
-  #endif
-}
-
-
-void prepare_and_send_sms(const char* message, const char* phone_no)
-{
-  Serial.write("AT+CMGS=\"");
   Serial.write(phone_no);
   Serial.write(0x22);
   Serial.write(0x0D);  // hex equivalent of Carraige return
@@ -116,7 +150,7 @@ void prepare_and_send_sms(const char* message, const char* phone_no)
   delay(2000);
   Serial.print(message);
   delay(500);
-  Serial.print(char(26));//the ASCII code of the ctrl+z is 26
+  Serial.println(char(26));//the ASCII code of the ctrl+z is 26
 }
 
 
@@ -131,20 +165,12 @@ RING
 *
 *TODO: migrate to pure avr soluiton
 */
-bool is_calling(char* caller_number,U8X8 u8x8)
+bool is_calling(char* caller_number)
 {
   char buffer[100];//="OK\n\RING\n+CLIP: \"517083663\",129,,,\"\",0\nRING\+CLIP: \"517083663\",129,,,\"\",0";
   if (Serial.available() > 0)
   {
     Serial.readBytesUntil('\r', buffer, 100);
-    if(&u8x8!=NULL) //TODO: buffer is longer than row on u8x8 cut, show, delay little bit is needed.
-    {
-      u8x8.setFont(u8x8_font_victoriamedium8_r);
-      u8x8.setCursor(0, 6);
-      u8x8.print("               ");
-      u8x8.setCursor(0, 6);
-      u8x8.print(buffer);
-    }
     char * pch;
     pch = strstr(buffer,"+CLIP");
     if(pch!=NULL)
@@ -174,16 +200,19 @@ void send_telemetry_report(const char* report)
   {
     init_GPRS();
   }
+  init_GPRS(); //as workaroud until full error processing will be covered
   write_and_wait("AT+TCPSETUP=0,34.203.32.119,80\r",1000);  //use dweet.io / freeboard //TODO: IP as #define
+  //can be response: +TCPSETUP:Error n
   char buf[25];
   uint16_t string_lenght = strlen(report);
   sprintf(buf, "AT+TCPSEND=0,%d\r",string_lenght);
   write_and_wait(buf,1000);
+  //can be +TCPSEND: Buffr not enough,0
   //write_and_wait("POST /dweet/for/werar1234?test=1 HTTP/1.1\r\nHost: dweet.io\r\nConnection: close\r\nAccept: */*\r\n\r\n",500); //http://www.esp8266.com/viewtopic.php?f=19&t=1981
   write_and_wait(report,500);
   const char c = (char)0x0D;
   write_and_wait(&c,1000);
-  //write_and_wait("AT+TCPCLOSE=0\r",500);
+  write_and_wait("AT+TCPCLOSE=0\r",500);
 }
 
 void write_and_wait(const char* text, uint16_t delay_time)

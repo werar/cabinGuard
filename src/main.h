@@ -22,8 +22,8 @@ typedef struct parameters_type
 typedef struct timers_type
 {
   uint32_t secounds;
-  uint32_t sent_telemetry_report;
-  uint32_t reenable_alerts;
+  int32_t sent_telemetry_report;
+  int32_t reenable_alerts;
   bool is_alert_was_sent;
 };
 

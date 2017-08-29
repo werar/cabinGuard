@@ -19,7 +19,6 @@ https://www.freeboard.io/board/edit/rBbZQR
 void init_GPRS()
 {
   uint8_t number_of_try=5;
-  delay(6000);
   while(number_of_try>0)
   {
       send_commands_to_init_GPRS();
@@ -44,7 +43,7 @@ void send_commands_to_init_GPRS()
 
 void update_time_from_provider()
 {
-  write_and_wait("AT+COPS=2\r",1000);
+  write_and_wait("AT+COPS=2\r",500);
   write_and_wait("AT+CTZU=1\r",1000);
   write_and_wait("AT+COPS=0\r",1000);
   write_and_wait("AT+CCLK?\r",1000);
@@ -127,22 +126,7 @@ void send_sms(const char* message, const char* phone_no)
 
 void prepare_and_send_sms(const char* message, const char* phone_no)
 {
-  const uint8_t buffer_size=50;//TODO: refactoring needed.
-  char buffer[buffer_size]={"xxxxxxxxxx"};
   Serial.write("AT+CMGS=\""); //after that can be an error
-  if (Serial.available() > 0)
-  {
-    Serial.readBytesUntil('\n', buffer, buffer_size);//echo skip it
-    Serial.readBytesUntil('\n', buffer, buffer_size);
-    char * pch;
-    pch = strstr(buffer,"ERROR");
-    if(pch!=NULL)
-    {
-      Serial.println("Error during sms sending, gsm initialization is required");
-      init_GSM();
-    }
-  }
-
   Serial.write(phone_no);
   Serial.write(0x22);
   Serial.write(0x0D);  // hex equivalent of Carraige return
@@ -196,10 +180,10 @@ V
 */
 void send_telemetry_report(const char* report)
 {
-  if(!is_ppp_link_established())
+  /*if(!is_ppp_link_established())
   {
     init_GPRS();
-  }
+  }*/
   init_GPRS(); //as workaroud until full error processing will be covered
   write_and_wait("AT+TCPSETUP=0,34.203.32.119,80\r",1000);  //use dweet.io / freeboard //TODO: IP as #define
   //can be response: +TCPSETUP:Error n
@@ -211,7 +195,7 @@ void send_telemetry_report(const char* report)
   //write_and_wait("POST /dweet/for/werar1234?test=1 HTTP/1.1\r\nHost: dweet.io\r\nConnection: close\r\nAccept: */*\r\n\r\n",500); //http://www.esp8266.com/viewtopic.php?f=19&t=1981
   write_and_wait(report,500);
   const char c = (char)0x0D;
-  write_and_wait(&c,1000);
+  write_and_wait(&c,500);
   write_and_wait("AT+TCPCLOSE=0\r",500);
 }
 
@@ -230,7 +214,7 @@ AT+TCPSETUP=0,34.203.32.119,80  <<setup is ok but ppp link is down use XIIC to c
 OK
 AT+TCPSEND=0,129
 +TCPSEND:Error1  <<<<<< Is error ppp link is not set:
-POST /dweet/for/werar1234?temp=24.16&hum=60&press=979.84&pir_alert=1 HTTP/1.1
+POST /dweet/for/werar1234?temp=24.16&hum=60&press=979.84&F=1 HTTP/1.1
 ERROR <<<<<<<< is ERROR
 
 to test if ppp link is ok use:
@@ -257,13 +241,7 @@ bool is_ppp_link_established()
   if(chars_in_line==0)
   {
     Serial.println("No any line recived on UART");
-  }else
-  {
-    //Serial.print("Buffer: ");
-    //Serial.print(buffer);
-    //Serial.println(" END.");
   }
-
   char * pch;
   pch = strstr(buffer,"+XIIC:    0,");
   //pch = strstr(buffer,"0.0.0.0");

@@ -122,10 +122,10 @@ void check_movement()
   if(val==LOW)
   {
     parameters.pir_alert=false;
-    return;
+  }else
+  {
+    parameters.pir_alert=true;
   }
-  parameters.pir_alert=true;
-  return;
 }
 
 void alerts()
@@ -186,14 +186,15 @@ void messages_and_reports_via_sms()
 
 void setup()
 {
-  Serial.begin(4800);                                                 // initialize serial
+  //Serial.begin(4800);   
+  Serial.begin(9600);                                               // initialize serial
   pinMode(PIR_PIN, INPUT);  //TODO: use avr convention
   u8x8.begin();
-  delay(15000); //TODO: check if modem is ready (+PBREADY)
+  BMESensor.begin();
+  delay(16000); //TODO: check if modem is ready (+PBREADY)
   init_GSM();
   init_GPRS();
-  update_time_from_provider();
-  BMESensor.begin();                                                    // initalize bme280 sensor
+  //update_time_from_provider();
   init_avr_timers();
   reset_timers();
   parameters.enable_alert=true;
@@ -202,9 +203,8 @@ void setup()
 void loop()
 {
    get_BMEData();
-   //print_BMEData();
    check_movement();
    messages_and_reports();
    alerts();
-   delay(1002);                                                    // wait a while before next loop
+   delay(999);                                                    // wait a while before next loop
 }

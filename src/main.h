@@ -2,7 +2,7 @@
 #define MAIN_H_
 
 #define PIR_PIN 3
-#define SECOUNDS_TO_SEND_TELEMETRY_REPORT 60; //172800 sms every two days
+#define SECOUNDS_TO_SEND_TELEMETRY_REPORT 300; //172800 sms every two days
 #define SECOUNDS_TO_WAIT_WITH_ALERT_MESSAGE 600;
 #define SECOUNDS_TO_ARM_ALERTS 600;
 #define PHONE_TO_CALL "0048517083663"
@@ -26,7 +26,5 @@ typedef struct timers_type
   int32_t reenable_alerts;
   bool is_alert_was_sent;
 };
-
-
 
 #endif

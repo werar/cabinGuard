@@ -143,9 +143,14 @@ void alerts()
   }
   if(parameters.pir_alert && !timers.is_alert_was_sent && parameters.enable_alert)
   {
-    send_sms(ALERT_MESSAGE_TEXT,PHONE_TO_CALL);
+    if(!send_sms(ALERT_MESSAGE_TEXT,PHONE_TO_CALL))
+    {
+      init_GSM();
+      send_sms(ALERT_MESSAGE_TEXT,PHONE_TO_CALL);
+    }
     timers.is_alert_was_sent=true;
     timers.reenable_alerts=SECOUNDS_TO_ARM_ALERTS;
+    delay(30000); //workaroud for rf noise during sending packages via GSM modem
   }
 }
 
@@ -156,45 +161,23 @@ void messages_and_reports()
   {
     char text_to_sent[150]; //"POST /dweet/for/werar1234?test=1 HTTP/1.1\r\nHost: dweet.io\r\nConnection: close\r\nAccept: */*\r\n\r\n"
     sprintf(text_to_sent, "POST /dweet/for/werar1234?temp=%.2f&hum=%d&press=%.2f&pir_alert=%d HTTP/1.1\r\nHost: dweet.io\r\nConnection: close\r\nAccept: */*\r\n\r\n", (double)parameters.temperature,parameters.humidity,(double)parameters.pressure,parameters.pir_alert);
-    #ifdef DEBUG
-    Serial.println(text_to_sent);
-    #else
-    send_telemetry_report(text_to_sent); //BUG: the soft hangs after sending few messages
-    #endif
+    if(!send_telemetry_report(text_to_sent))
+    {
+      init_GSM();
+      send_telemetry_report(text_to_sent);
+    }
     timers.sent_telemetry_report=SECOUNDS_TO_SEND_TELEMETRY_REPORT;
-  }
-}
-
-void messages_and_reports_via_sms()
-{
-  draw();
-  if(timers.sent_telemetry_report<=0)
-  {
-    char text_to_sent[100];
-    strcpy(text_to_sent,"Telemetry report\n");
-    char buf[20];
-    sprintf(buf, "Temperature: %.2f\n", (double)parameters.temperature);
-    strcat(text_to_sent,buf);
-    sprintf(buf, "Humidity: %d%%\n", parameters.humidity);
-    strcat(text_to_sent,buf);
-    sprintf(buf, "Pressure: %.2fhPa\n", (double)parameters.pressure);
-    strcat(text_to_sent,buf);
-    send_sms(text_to_sent,PHONE_TO_CALL);
-    timers.sent_telemetry_report=SECOUNDS_TO_SEND_TELEMETRY_REPORT;
+    delay(30000); //workaroud for rf noise during sending packages via GSM modem
   }
 }
 
 void setup()
 {
-  //Serial.begin(4800);   
   Serial.begin(9600);                                               // initialize serial
-  pinMode(PIR_PIN, INPUT);  //TODO: use avr convention
+  pinMode(PIR_PIN,INPUT_PULLUP);
   u8x8.begin();
   BMESensor.begin();
-  delay(16000); //TODO: check if modem is ready (+PBREADY)
   init_GSM();
-  init_GPRS();
-  //update_time_from_provider();
   init_avr_timers();
   reset_timers();
   parameters.enable_alert=true;
@@ -206,5 +189,5 @@ void loop()
    check_movement();
    messages_and_reports();
    alerts();
-   delay(999);                                                    // wait a while before next loop
+   delay(1000);                                                    // wait a while before next loop
 }

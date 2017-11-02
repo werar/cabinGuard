@@ -9,13 +9,23 @@ https://www.freeboard.io/board/edit/rBbZQR
 */
 
 #include <Arduino.h>
+#include <PubSubClient.h>
 #include "gsm_modem.h"
 #include "main.h"
 
-
+#include <SoftwareSerial.h>
+SoftwareSerial SerialAT(2, 3); // RX, TX
 TinyGsm modem(SerialAT);
 TinyGsmClient client(modem);
+PubSubClient mqtt(client);
 
+//#include <StreamDebugger.h>
+//StreamDebugger StreamDbg(SerialAT, Serial);
+
+const char* broker = "176.122.224.123";//"vps.weraksa.net";
+const char* topicLed = "GsmClientTest/led";
+const char* topicInit = "GsmClientTest/init";
+const char* topicLedStatus = "GsmClientTest/ledStatus";
 
 //#define DEBUG //uncomment that if you want to see messages on Serial console
 /***
@@ -23,7 +33,20 @@ TinyGsmClient client(modem);
 */
 void init_GSM()
 {
-   modem.restart();
+  Serial.print("Initializing modem...");
+  //TinyGsmAutoBaud(SerialAT);
+  SerialAT.begin(28800);
+  delay(5000);
+
+  if (!modem.restart())
+  {
+    Serial.println("modem restart failed");
+    delay(10000);
+    return;
+  }
+    Serial.println("done");
+    Serial.println(modem.getModemInfo());
+    delay(10000);
 }
 
 
@@ -46,9 +69,9 @@ RING
 bool is_calling(char* caller_number)
 {
   char buffer[100];//="OK\n\RING\n+CLIP: \"517083663\",129,,,\"\",0\nRING\+CLIP: \"517083663\",129,,,\"\",0";
-  if (Serial.available() > 0)
+  if (SerialAT.available() > 0)
   {
-    Serial.readBytesUntil('\r', buffer, 100);
+    SerialAT.readBytesUntil('\r', buffer, 100);
     char * pch;
     pch = strstr(buffer,"+CLIP");
     if(pch!=NULL)
@@ -74,10 +97,12 @@ V
 */
 bool send_telemetry_report(const char* report)
 {
-    if (!modem.waitForNetwork()) {
-      delay(10000);
-      return false;
-    }
+
+  if (!modem.waitForNetwork())
+  {
+    delay(10000);
+    return false;
+  }
     if (!modem.gprsConnect("internet", "internet", "internet")) {
       delay(10000);
       return false;
@@ -90,4 +115,62 @@ bool send_telemetry_report(const char* report)
     client.stop();
     modem.gprsDisconnect();
     return true;
+}
+
+/***
+*
+https://github.com/vshymanskyy/TinyGSM/blob/master/examples/MqttClient/MqttClient.ino
+*/
+bool send_telemetry_report_to_mqtt(parameters_type* parameters)
+{
+    Serial.println("Sending telemetry report via mqtt");
+      Serial.println("Waiting for network...");
+    if (!modem.waitForNetwork()) {
+      delay(10000);
+      return false;
+    }
+    Serial.println("Odpalam gprs");
+    if (!modem.gprsConnect("internet", "internet", "internet")) {
+      delay(10000);
+      Serial.println("GPRS nie odpalil");
+      return false;
+    }
+
+    // MQTT Broker setup
+    Serial.println("Odpalam mqtt");
+    mqtt.setServer(broker, 1883);
+    mqtt.setCallback(mqttCallback);
+    mqttConnect();
+    mqtt.publish(topicInit, "Test");
+    Serial.println("Zamykam gprs");
+    modem.gprsDisconnect();
+    return true;
+}
+
+bool mqttConnect() {
+  Serial.print("Connecting to ");
+  Serial.print(broker);
+  if (!mqtt.connect("GsmClientTest","user1","welcome1")) {
+    Serial.println(" fail");
+    return false;
+  }
+  Serial.println(" OK");
+  mqtt.publish(topicInit, "GsmClientTest started");
+  mqtt.subscribe(topicLed);
+  return mqtt.connected();
+}
+
+void mqttCallback(char* topic, byte* payload, unsigned int len) {
+  Serial.print("Message arrived [");
+  Serial.print(topic);
+  Serial.print("]: ");
+  Serial.write(payload, len);
+  Serial.println();
+
+  // Only proceed if incoming message's topic matches
+  if (String(topic) == topicLed) {
+    //ledStatus = !ledStatus;
+    //digitalWrite(LED_PIN, ledStatus);
+    //mqtt.publish(topicLedStatus, ledStatus ? "1" : "0");
+  }
 }

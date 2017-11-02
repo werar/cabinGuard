@@ -1,8 +1,8 @@
 #ifndef MAIN_H_
 #define MAIN_H_
 
-#define PIR_PIN 3
-#define SECOUNDS_TO_SEND_TELEMETRY_REPORT 300; //172800 sms every two days
+#define PIR_PIN 4
+#define SECOUNDS_TO_SEND_TELEMETRY_REPORT 180; //172800 sms every two days
 #define SECOUNDS_TO_WAIT_WITH_ALERT_MESSAGE 600;
 #define SECOUNDS_TO_ARM_ALERTS 600;
 #define PHONE_TO_CALL "0048517083663"

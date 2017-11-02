@@ -1,27 +1,5 @@
 /**************************************************************
- *
- * For this example, you need to install PubSubClient library:
- *   https://github.com/knolleary/pubsubclient/releases/latest
- *   or from http://librarymanager/all#PubSubClient
- *
- * TinyGSM Getting Started guide:
- *   http://tiny.cc/tiny-gsm-readme
- *
- **************************************************************
- * Use Mosquitto client tools to work with MQTT
- *   Ubuntu/Linux: sudo apt-get install mosquitto-clients
- *   Windows:      https://mosquitto.org/download/
- *
- * Subscribe for messages:
- *   mosquitto_sub -h test.mosquitto.org -t GsmClientTest/init -t GsmClientTest/ledStatus -q 1
- * Toggle led:
- *   mosquitto_pub -h test.mosquitto.org -t GsmClientTest/led -q 1 -m "toggle"
- *
- * You can use Node-RED for wiring together MQTT-enabled devices
- *   https://nodered.org/
- * Also, take a look at these additional Node-RED modules:
- *   node-red-contrib-blynk-websockets
- *   node-red-dashboard
+* TODO time to time do init_GSM
  *
  **************************************************************/
  #include <Wire.h>                                                       // required by BME280 library
@@ -78,10 +56,7 @@ long lastReconnectAttempt = 0;
 
 void print_BMEData() //TODO: save that to some structure.
 {
-  char bufout[10];
   BMESensor.refresh();                                                  // read current sensor data
-  sprintf(bufout,"%c[1;0H",ASCII_ESC);
-  Serial.print(bufout);
 
   Serial.print("Temperature: ");
   Serial.print(BMESensor.temperature);                                  // display temperature in Celsius
@@ -195,11 +170,11 @@ void loop() {
       get_BMEData();
       print_BMEData();
       char str[15];
-      sprintf(str, "%.1fC  ", (double)parameters.temperature);
+      sprintf(str, "%.1f  ", (double)parameters.temperature);
       mqtt.publish(topicTemp, str);
-      sprintf(str, "%d%%  ", parameters.humidity);
+      sprintf(str, "%d  ", parameters.humidity);
       mqtt.publish(topicHum, str);
-      sprintf(str, "%.1fhPa  ", (double)parameters.pressure);
+      sprintf(str, "%.1f  ", (double)parameters.pressure);
       mqtt.publish(topicPressure, str);
 
       last_time_to_send_report=time_to_send_report;

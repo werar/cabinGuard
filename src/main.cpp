@@ -165,7 +165,7 @@ void loop() {
   unsigned long time_to_send_report = millis();
   if (mqtt.connected()) {
     mqtt.loop();
-    if(time_to_send_report-last_time_to_send_report>10000L)
+    if(time_to_send_report-last_time_to_send_report>60000L)
     {
       get_BMEData();
       print_BMEData();

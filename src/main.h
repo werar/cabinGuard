@@ -19,12 +19,5 @@ typedef struct parameters_type
       float pressure;
 };
 
-typedef struct timers_type
-{
-  uint32_t secounds;
-  int32_t sent_telemetry_report;
-  int32_t reenable_alerts;
-  bool is_alert_was_sent;
-};
 
 #endif
